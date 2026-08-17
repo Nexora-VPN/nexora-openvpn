@@ -41,4 +41,6 @@ Everything else is a verbatim copy of the upstream release below.
 4. Tag a new version and update the node's `replace` directive.
 
 Upstream base: `github.com/sagernet/sing-openvpn v0.0.0-20260729104525-103eb5fe5eb6`
-(the version pinned by sing-box v1.14.0-beta.15).
+— the version pinned by sing-box v1.14.0-beta.15 **and** v1.14.0-beta.17 (both
+pin the same sing-openvpn, so bumping the node from beta.15→beta.17 needed no
+change here).
