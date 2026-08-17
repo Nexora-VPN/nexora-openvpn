@@ -1,0 +1,20 @@
+# Minimal CI for the Nexora fork: verify the module builds, vets and (its own)
+# tests pass. Upstream's Makefile/test suite lived in a separate `test/`
+# submodule that is not part of the published module, so we don't run it here —
+# this fork's only change is source_user.go.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
