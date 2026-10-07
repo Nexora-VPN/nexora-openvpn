@@ -94,6 +94,7 @@ func NewServer(options ServerOptions) (*Server, error) {
 	} else {
 		server.static = newStaticKeyServer(server)
 	}
+	announceServer(options.Logger, server) // Nexora: see source_user.go
 	return server, nil
 }
 

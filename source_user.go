@@ -6,7 +6,8 @@ import "net/netip"
 // github.com/sagernet/sing-openvpn. It exposes the authenticated username behind
 // a client's assigned VPN (tunnel) source address so the sing-box server
 // endpoint can tag each routed connection with metadata.User for per-user
-// traffic accounting — which upstream does not do for openvpn-server.
+// traffic accounting — which upstream does not do for openvpn-server — and
+// hands the node the *Server that answers it (ServerAnnouncer).
 //
 // Keep this the sole diff so re-syncing to a newer upstream sing-openvpn is a
 // clean copy + re-add of this one file.
@@ -49,4 +50,20 @@ func (s *tlsPeerSession) loadNexoraUsername() (string, bool) {
 		return *p, true
 	}
 	return "", false
+}
+
+// ServerAnnouncer is implemented by a ServerOptions.Logger that wants the
+// *Server NewServer builds. sing-box creates the server inside its endpoint's
+// Start and keeps it in an unexported field; the logger is the one thing the
+// node hands that endpoint which reaches NewServer, so the node passes a
+// logger that also implements this and learns the server without reaching
+// into sing-box's fields.
+type ServerAnnouncer interface {
+	AnnounceOpenVPNServer(server *Server)
+}
+
+func announceServer(logger any, server *Server) {
+	if announcer, ok := logger.(ServerAnnouncer); ok {
+		announcer.AnnounceOpenVPNServer(server)
+	}
 }

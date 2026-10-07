@@ -13,7 +13,8 @@ replace github.com/sagernet/sing-openvpn => github.com/Nexora-VPN/nexora-openvpn
 
 ## The only change
 
-The fork exposes `Server.SourceUser(addr netip.Addr) (string, bool)`, which maps a
+The fork exposes `Server.SourceUser(addr netip.Addr) (string, bool)` and, since
+v0.1.1, a `ServerAnnouncer` hook (below), which maps a
 client's assigned VPN (tunnel) source address to its authenticated username. The
 node's local `openvpn-server` endpoint uses it to set `metadata.User` on each
 routed connection so per-user traffic accounting works — upstream sing-openvpn
@@ -23,10 +24,17 @@ keeps that mapping internal (the route registry stores the inner
 `openvpn-server` endpoint never tags the user, so its traffic is otherwise never
 attributed to a user.
 
-Three touch points (grep for `Nexora`):
+sing-box builds the `*Server` inside its endpoint's `Start` and keeps it in an
+unexported field. The node used to reach it with reflection; since v0.1.1 it
+passes the endpoint a logger that implements `ServerAnnouncer`, and `NewServer`
+hands that logger the server it built. The logger is the one thing the node
+gives sing-box's endpoint that reaches `NewServer`.
+
+Four touch points (grep for `Nexora`):
 - `peer_session.go` — one field on `tlsPeerSession`: `nexoraUsername atomic.Pointer[string]` (+ the `sync/atomic` import).
 - `server_session.go` — one line in `lockAuthenticatedUsername`: `s.tlsPeerSession.storeNexoraUsername(username)`.
-- `source_user.go` — the new file: `SourceUser`, `usernameOf`, `storeNexoraUsername`, `loadNexoraUsername`.
+- `server.go` — one line before `NewServer` returns: `announceServer(options.Logger, server)`.
+- `source_user.go` — the new file: `SourceUser`, `usernameOf`, `storeNexoraUsername`, `loadNexoraUsername`, `ServerAnnouncer`, `announceServer`.
 
 Everything else is a verbatim copy of the upstream release below.
 
@@ -35,7 +43,8 @@ Everything else is a verbatim copy of the upstream release below.
 1. `go list -m -f '{{.Dir}}' github.com/sagernet/sing-openvpn` in a node checkout
    pinned to the new sing-box version.
 2. Copy that directory over this one (keep `.git`, `source_user.go`, this file).
-3. Re-apply the two in-place edits above (the field + the one-line store call),
+3. Re-apply the three in-place edits above (the field, the one-line store call,
+   the one-line announce call),
    and confirm `source_user.go` still compiles (field names `routes`, `access`,
    `session` unchanged).
 4. Tag a new version and update the node's `replace` directive.
