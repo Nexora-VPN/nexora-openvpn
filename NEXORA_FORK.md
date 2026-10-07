@@ -30,11 +30,17 @@ passes the endpoint a logger that implements `ServerAnnouncer`, and `NewServer`
 hands that logger the server it built. The logger is the one thing the node
 gives sing-box's endpoint that reaches `NewServer`.
 
-Four touch points (grep for `Nexora`):
+Since v0.1.2 the node can also change a running server's users:
+`SetAuthenticator` replaces the username/password check for every later login,
+and `DisconnectUsers` closes the sessions of usernames that should no longer be
+in. Without them a user added, edited or removed meant rebuilding the server,
+and every client stayed cut off until its `ping_restart` (60 s) ran out.
+
+Touch points (grep for `Nexora`):
 - `peer_session.go` — one field on `tlsPeerSession`: `nexoraUsername atomic.Pointer[string]` (+ the `sync/atomic` import).
-- `server_session.go` — one line in `lockAuthenticatedUsername`: `s.tlsPeerSession.storeNexoraUsername(username)`.
-- `server.go` — one line before `NewServer` returns: `announceServer(options.Logger, server)`.
-- `source_user.go` — the new file: `SourceUser`, `usernameOf`, `storeNexoraUsername`, `loadNexoraUsername`, `ServerAnnouncer`, `announceServer`.
+- `server_session.go` — one line in `lockAuthenticatedUsername`: `s.tlsPeerSession.storeNexoraUsername(username)`; and in `verifyUserPass` the authenticator is read through `s.server.parent.authenticator()` instead of `options.Authentication.Authenticator`.
+- `server.go` — one field on `Server`: `nexoraAuthenticator atomic.Pointer[UserPassAuthenticator]`; and one line before `NewServer` returns: `announceServer(options.Logger, server)`.
+- `source_user.go` — the new file: `SourceUser`, `usernameOf`, `storeNexoraUsername`, `loadNexoraUsername`, `ServerAnnouncer`, `announceServer`, `SetAuthenticator`, `authenticator`, `DisconnectUsers`.
 
 Everything else is a verbatim copy of the upstream release below.
 
@@ -43,10 +49,10 @@ Everything else is a verbatim copy of the upstream release below.
 1. `go list -m -f '{{.Dir}}' github.com/sagernet/sing-openvpn` in a node checkout
    pinned to the new sing-box version.
 2. Copy that directory over this one (keep `.git`, `source_user.go`, this file).
-3. Re-apply the three in-place edits above (the field, the one-line store call,
-   the one-line announce call),
-   and confirm `source_user.go` still compiles (field names `routes`, `access`,
-   `session` unchanged).
+3. Re-apply the in-place edits above (the two fields, the one-line store call,
+   the authenticator read, the one-line announce call), and confirm
+   `source_user.go` still compiles (field names `routes`, `access`, `session`,
+   `tls`, `sessionAccess`, `sessionByPeer` unchanged).
 4. Tag a new version and update the node's `replace` directive.
 
 Upstream base: `github.com/sagernet/sing-openvpn v0.0.0-20260729104525-103eb5fe5eb6`

@@ -21,6 +21,9 @@ type Server struct {
 	closeErr                   error
 	routes                     *peerRouteRegistry
 	ipPool                     *ipPool
+	// nexoraAuthenticator (Nexora fork) replaces options.Authentication's
+	// authenticator once SetAuthenticator is called. See source_user.go.
+	nexoraAuthenticator atomic.Pointer[UserPassAuthenticator]
 }
 
 type serverLifecycleState uint8

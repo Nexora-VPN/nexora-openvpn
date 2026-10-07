@@ -510,7 +510,7 @@ func (s *tlsServerSession) logTermination(err error) {
 }
 
 func (s *tlsServerSession) verifyUserPass(ctx context.Context, message tlsKeyMethodMessage) error {
-	authenticator := s.server.parent.options.Authentication.Authenticator
+	authenticator := s.server.parent.authenticator() // Nexora fork: swappable, see source_user.go
 	if authenticator == nil {
 		return nil
 	}
