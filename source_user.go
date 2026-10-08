@@ -2,7 +2,7 @@ package openvpn
 
 import "net/netip"
 
-// This file is the ONLY addition Nexora makes on top of upstream
+// This file holds what Nexora adds on top of upstream
 // github.com/sagernet/sing-openvpn. It exposes the authenticated username behind
 // a client's assigned VPN (tunnel) source address so the sing-box server
 // endpoint can tag each routed connection with metadata.User for per-user
@@ -10,8 +10,9 @@ import "net/netip"
 // the node the *Server that answers it (ServerAnnouncer), and lets the node
 // change the server's users while it runs (SetAuthenticator, DisconnectUsers).
 //
-// Keep this the sole diff so re-syncing to a newer upstream sing-openvpn is a
-// clean copy + re-add of this one file.
+// Everything else is upstream's, apart from the few one-line hooks into it that
+// NEXORA_FORK.md lists (grep for "Nexora"): keep it that way, so re-syncing to a
+// newer upstream sing-openvpn is a clean copy, this file, and those hooks.
 
 // SourceUser returns the authenticated username of the client that owns the
 // given VPN source address (the inner tunnel IP seen on routed connections), and

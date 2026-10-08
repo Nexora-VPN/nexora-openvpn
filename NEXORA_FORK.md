@@ -11,7 +11,7 @@ sing-box or the node:
 replace github.com/sagernet/sing-openvpn => github.com/Nexora-VPN/nexora-openvpn <version>
 ```
 
-## The only change
+## What the fork changes
 
 The fork exposes `Server.SourceUser(addr netip.Addr) (string, bool)` and, since
 v0.1.1, a `ServerAnnouncer` hook (below), which maps a
