@@ -1,6 +1,6 @@
 module github.com/sagernet/sing-openvpn
 
-go 1.26.5
+go 1.27.2
 
 require (
 	github.com/RyuaNerin/go-krypto v1.3.0
