@@ -200,6 +200,9 @@ func tlsAdvertisedPlatform(operatingSystem string) string {
 }
 
 func buildTLSServerPeerInfo(options ServerOptions) string {
+	if len(options.Tunnel.AddressPools) > 0 {
+		return ""
+	}
 	ivProto := tlsIVProtoDataV2 | tlsIVProtoTLSKeyExport | tlsIVProtoCCExitNotify
 	var builder strings.Builder
 	builder.WriteString("IV_PROTO=")
@@ -465,6 +468,9 @@ func tlsProtoName(protocol string, isClient bool) string {
 }
 
 func writeLengthPrefixedString(buffer *bytes.Buffer, value string) error {
+	if value == "" {
+		return binary.Write(buffer, binary.BigEndian, uint16(0))
+	}
 	stringBytes := append([]byte(value), 0)
 	if len(stringBytes) > 0xffff {
 		return E.New("length-prefixed string too long")

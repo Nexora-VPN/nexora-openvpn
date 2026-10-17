@@ -40,6 +40,7 @@ Touch points (grep for `Nexora`):
 - `peer_session.go` — one field on `tlsPeerSession`: `nexoraUsername atomic.Pointer[string]` (+ the `sync/atomic` import).
 - `server_session.go` — one line in `lockAuthenticatedUsername`: `s.tlsPeerSession.storeNexoraUsername(username)`; and in `verifyUserPass` the authenticator is read through `s.server.parent.authenticator()` instead of `options.Authentication.Authenticator`.
 - `server.go` — one field on `Server`: `nexoraAuthenticator atomic.Pointer[UserPassAuthenticator]`; and one line before `NewServer` returns: `announceServer(options.Logger, server)`.
+- `key_method.go` — `buildTLSServerPeerInfo` returns "" when the server has address pools (OpenVPN `--server` mode sends no peer info; RouterOS' client mis-parses it); `writeLengthPrefixedString` writes an empty string as a bare zero length, as OpenVPN's `write_empty_string` does (RouterOS read the NULs of the empty username, password and peer info as the start of the PUSH_REPLY).
 - `source_user.go` — the new file: `SourceUser`, `usernameOf`, `storeNexoraUsername`, `loadNexoraUsername`, `ServerAnnouncer`, `announceServer`, `SetAuthenticator`, `authenticator`, `DisconnectUsers`.
 
 Everything else is a verbatim copy of the upstream release below.
