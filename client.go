@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/sagernet/sing/common/buf"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -24,6 +25,9 @@ type clientLifecycle struct {
 	closeOnce        sync.Once
 	started          bool
 	closed           bool
+	suspended        atomic.Bool
+	resumed          chan struct{}
+	stateChanged     chan struct{}
 	terminalError    error
 	supervisorCancel context.CancelFunc
 	supervisorDone   chan struct{}
@@ -126,6 +130,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 		remotes: remotes,
 		lifecycle: clientLifecycle{
 			dataReadDone: make(chan struct{}),
+			stateChanged: make(chan struct{}),
 		},
 		dataPlane: clientDataPlane{
 			allowCompressionPolicy: allowCompressionPolicyValue,
@@ -160,6 +165,11 @@ func (c *Client) Start() error {
 		c.lifecycle.access.Unlock()
 		return ErrClientClosed
 	}
+	err := c.checkSessionMaterial()
+	if err != nil {
+		c.lifecycle.access.Unlock()
+		return err
+	}
 	supervisorContext, cancelSupervisor := context.WithCancel(c.options.Context)
 	c.lifecycle.supervisorCancel = cancelSupervisor
 	c.lifecycle.supervisorDone = make(chan struct{})
@@ -172,6 +182,60 @@ func (c *Client) Start() error {
 
 func (c *Client) Ready() bool {
 	return c.readySession() != nil
+}
+
+func (c *Client) WaitReady(ctx context.Context) error {
+	for {
+		c.lifecycle.access.Lock()
+		stateChanged := c.lifecycle.stateChanged
+		terminalError := c.lifecycle.terminalError
+		closed := c.lifecycle.closed
+		ready := c.lifecycle.currentSession != nil && c.lifecycle.currentSession.Ready()
+		c.lifecycle.access.Unlock()
+		if terminalError != nil {
+			return terminalError
+		}
+		if closed {
+			return ErrClientClosed
+		}
+		if ready {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-stateChanged:
+		}
+	}
+}
+
+func (c *Client) Suspend() {
+	c.lifecycle.access.Lock()
+	if c.lifecycle.suspended.Load() || c.lifecycle.closed {
+		c.lifecycle.access.Unlock()
+		return
+	}
+	c.lifecycle.suspended.Store(true)
+	c.lifecycle.resumed = make(chan struct{})
+	session := c.lifecycle.currentSession
+	c.lifecycle.access.Unlock()
+	if session != nil {
+		session.Fail(ErrClientSuspended)
+	}
+}
+
+func (c *Client) Resume() {
+	if !c.lifecycle.suspended.Load() {
+		return
+	}
+	c.lifecycle.access.Lock()
+	if !c.lifecycle.suspended.Load() {
+		c.lifecycle.access.Unlock()
+		return
+	}
+	c.lifecycle.suspended.Store(false)
+	close(c.lifecycle.resumed)
+	c.lifecycle.access.Unlock()
 }
 
 func (c *Client) RestartSession() {

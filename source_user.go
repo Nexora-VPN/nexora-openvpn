@@ -10,8 +10,8 @@ import "net/netip"
 // the node the *Server that answers it (ServerAnnouncer), and lets the node
 // change the server's users while it runs (SetAuthenticator, DisconnectUsers).
 //
-// Everything else is upstream's, apart from the few one-line hooks into it that
-// NEXORA_FORK.md lists (grep for "Nexora"): keep it that way, so re-syncing to a
+// Everything else is upstream's, apart from the few one-line hooks into it
+// (grep for "Nexora"): keep it that way, so re-syncing to a
 // newer upstream sing-openvpn is a clean copy, this file, and those hooks.
 
 // SourceUser returns the authenticated username of the client that owns the

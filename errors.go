@@ -11,6 +11,7 @@ var (
 	ErrNoPushReply                 = E.New("server did not reply to push requests")
 	ErrDataChannelNotReady         = E.New("data channel is not ready")
 	ErrClientClosed                = E.New("client is closed")
+	ErrClientSuspended             = E.New("client is suspended")
 	ErrServerClosed                = E.New("server is closed")
 	ErrPeerNotFound                = E.New("peer not found")
 	ErrMissingStaticKey            = E.New("missing openvpn static key")

@@ -362,6 +362,7 @@ func (s *staticKeyClientSession) setReady(ready bool) {
 	s.access.Lock()
 	s.ready = ready
 	s.access.Unlock()
+	s.parent.signalStateChanged()
 }
 
 func (s *staticKeyClientSession) finish(err error) {

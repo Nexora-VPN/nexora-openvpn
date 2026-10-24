@@ -5,6 +5,7 @@ import (
 	cryptorand "crypto/rand"
 	"crypto/x509"
 	"encoding/base64"
+	"errors"
 	"math/big"
 	"net"
 	"strconv"
@@ -42,6 +43,9 @@ const (
 
 func classifyClientSessionError(err error) clientSessionErrorClass {
 	if err == nil {
+		return clientSessionErrorRetryable
+	}
+	if errors.Is(err, errClientSessionConfiguration) {
 		return clientSessionErrorRetryable
 	}
 	_, retryableAuthFailure := E.Cast[*AuthFailedTemporaryError](err)
@@ -83,7 +87,6 @@ func classifyClientSessionError(err error) clientSessionErrorClass {
 		ErrPingExitTimeout,
 		ErrInactiveTimeout,
 		ErrSessionTimeout,
-		errClientSessionConfiguration,
 	) {
 		return clientSessionErrorTerminal
 	}
@@ -227,6 +230,9 @@ func (c *Client) runSupervisor(ctx context.Context) {
 		if ctx.Err() != nil || c.isClosed() {
 			return
 		}
+		if !c.waitResumed(ctx) {
+			return
+		}
 		err := c.acquireSessionCredentials(ctx, !firstSession)
 		if err != nil {
 			if ctx.Err() != nil || c.isClosed() {
@@ -265,6 +271,10 @@ func (c *Client) runSupervisor(ctx context.Context) {
 			if ctx.Err() != nil || c.isClosed() {
 				return
 			}
+			if errors.Is(err, ErrClientSuspended) || c.isSuspended() {
+				backoff = clientReconnectInitialBackoff
+				continue
+			}
 			retryNow, replacementErr := c.interceptAuthChallenge(ctx, err)
 			if retryNow {
 				backoff = clientReconnectInitialBackoff
@@ -280,7 +290,11 @@ func (c *Client) runSupervisor(ctx context.Context) {
 			cursor = c.nextConnectionCursor(cursor, err, false)
 			backoff = applyClientSessionErrorBackoff(err, backoff)
 			if c.options.Logger != nil {
-				c.options.Logger.DebugContext(ctx, "session with ", remote.address, " over ", remote.remote.Protocol, " failed; retrying in ", backoff, ": ", err)
+				if errors.Is(err, errClientSessionConfiguration) {
+					c.options.Logger.ErrorContext(ctx, "session with ", remote.address, " over ", remote.remote.Protocol, " failed; retrying in ", backoff, ": ", err)
+				} else {
+					c.options.Logger.DebugContext(ctx, "session with ", remote.address, " over ", remote.remote.Protocol, " failed; retrying in ", backoff, ": ", err)
+				}
 			}
 			if !waitClientReconnectBackoff(ctx, backoff) {
 				return
@@ -298,12 +312,19 @@ func (c *Client) runSupervisor(ctx context.Context) {
 		firstSession = false
 		backoff = clientReconnectInitialBackoff
 		c.clearPreviousAuthFailure()
+		if c.isSuspended() {
+			session.Fail(ErrClientSuspended)
+		}
 		sessionErr := <-session.Done()
 		stopSessionOnContextDone()
 		_ = session.Close()
 		c.clearCurrentSession(session)
 		if ctx.Err() != nil || c.isClosed() {
 			return
+		}
+		if errors.Is(sessionErr, ErrClientSuspended) || c.isSuspended() {
+			backoff = clientReconnectInitialBackoff
+			continue
 		}
 		if sessionErr == nil {
 			return
@@ -323,7 +344,11 @@ func (c *Client) runSupervisor(ctx context.Context) {
 		cursor = c.nextConnectionCursor(cursor, sessionErr, true)
 		backoff = applyClientSessionErrorBackoff(sessionErr, backoff)
 		if c.options.Logger != nil {
-			c.options.Logger.DebugContext(ctx, "session with ", remote.address, " over ", remote.remote.Protocol, " ended; retrying in ", backoff, ": ", sessionErr)
+			if errors.Is(sessionErr, errClientSessionConfiguration) {
+				c.options.Logger.ErrorContext(ctx, "session with ", remote.address, " over ", remote.remote.Protocol, " ended; retrying in ", backoff, ": ", sessionErr)
+			} else {
+				c.options.Logger.DebugContext(ctx, "session with ", remote.address, " over ", remote.remote.Protocol, " ended; retrying in ", backoff, ": ", sessionErr)
+			}
 		}
 		if !waitClientReconnectBackoff(ctx, backoff) {
 			return
@@ -339,6 +364,7 @@ func (c *Client) closeSupervisorReadableState() {
 		c.lifecycle.currentSession = nil
 		c.stopDataReadsLocked()
 	}
+	c.signalStateChangedLocked()
 	c.lifecycle.access.Unlock()
 }
 
@@ -365,12 +391,39 @@ func applyClientSessionErrorBackoff(err error, backoff time.Duration) time.Durat
 func (c *Client) newClientSession(useActiveAuthToken bool, remote clientRemote) (clientSession, error) {
 	c.resetSessionConfiguration(remote)
 	if c.mode == ModeStaticKey {
-		return newStaticKeyClientSession(c, remote)
+		session, err := newStaticKeyClientSession(c, remote)
+		if err != nil {
+			return nil, err
+		}
+		return session, nil
 	}
 	if c.options.Mode == ModeTLS {
-		return newTLSClient(c, useActiveAuthToken, remote)
+		session, err := newTLSClient(c, useActiveAuthToken, remote)
+		if err != nil {
+			return nil, err
+		}
+		return session, nil
 	}
 	return nil, ErrUnsupportedMode
+}
+
+func (c *Client) checkSessionMaterial() error {
+	if c.mode == ModeStaticKey {
+		_, err := loadStaticKeyMaterialFromSource(c.options.StaticKey)
+		if err != nil {
+			return E.Cause(err, "load static key")
+		}
+		return nil
+	}
+	_, _, err := newTLSClientProtection(c.options)
+	if err != nil {
+		return E.Cause(err, "load control channel key")
+	}
+	_, err = buildTLSClientConfiguration(c.options)
+	if err != nil {
+		return E.Cause(err, "load TLS configuration")
+	}
+	return nil
 }
 
 func (c *Client) resetSessionConfiguration(remote clientRemote) {
@@ -402,6 +455,7 @@ func (c *Client) setCurrentSession(ctx context.Context, session clientSession) b
 		return false
 	}
 	c.lifecycle.currentSession = session
+	c.signalStateChangedLocked()
 	c.lifecycle.access.Unlock()
 	return true
 }
@@ -411,13 +465,48 @@ func (c *Client) clearCurrentSession(session clientSession) {
 	if c.lifecycle.currentSession == session {
 		c.lifecycle.currentSession = nil
 	}
+	c.signalStateChangedLocked()
 	c.lifecycle.access.Unlock()
+}
+
+func (c *Client) signalStateChanged() {
+	c.lifecycle.access.Lock()
+	c.signalStateChangedLocked()
+	c.lifecycle.access.Unlock()
+}
+
+func (c *Client) signalStateChangedLocked() {
+	close(c.lifecycle.stateChanged)
+	c.lifecycle.stateChanged = make(chan struct{})
+}
+
+func (c *Client) isSuspended() bool {
+	c.lifecycle.access.Lock()
+	defer c.lifecycle.access.Unlock()
+	return c.lifecycle.suspended.Load()
+}
+
+func (c *Client) waitResumed(ctx context.Context) bool {
+	c.lifecycle.access.Lock()
+	if !c.lifecycle.suspended.Load() {
+		c.lifecycle.access.Unlock()
+		return true
+	}
+	resumed := c.lifecycle.resumed
+	c.lifecycle.access.Unlock()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-resumed:
+		return true
+	}
 }
 
 func (c *Client) setTerminalError(err error) {
 	c.lifecycle.access.Lock()
 	c.lifecycle.terminalError = err
 	c.stopDataReadsLocked()
+	c.signalStateChangedLocked()
 	c.lifecycle.access.Unlock()
 }
 

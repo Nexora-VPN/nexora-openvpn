@@ -383,6 +383,7 @@ func (c *tlsClient) setReady(ready bool) {
 	c.access.Lock()
 	c.ready = ready
 	c.access.Unlock()
+	c.parent.signalStateChanged()
 }
 
 func (c *tlsClient) finish(err error) {
