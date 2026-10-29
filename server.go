@@ -21,9 +21,9 @@ type Server struct {
 	closeErr                   error
 	routes                     *peerRouteRegistry
 	ipPool                     *ipPool
-	// nexoraAuthenticator (Nexora fork) replaces options.Authentication's
+	// nxAuthenticator (NX fork) replaces options.Authentication's
 	// authenticator once SetAuthenticator is called. See source_user.go.
-	nexoraAuthenticator atomic.Pointer[UserPassAuthenticator]
+	nxAuthenticator atomic.Pointer[UserPassAuthenticator]
 }
 
 type serverLifecycleState uint8
@@ -97,7 +97,7 @@ func NewServer(options ServerOptions) (*Server, error) {
 	} else {
 		server.static = newStaticKeyServer(server)
 	}
-	announceServer(options.Logger, server) // Nexora: see source_user.go
+	announceServer(options.Logger, server) // NX: see source_user.go
 	return server, nil
 }
 

@@ -2,7 +2,7 @@ package openvpn
 
 import "net/netip"
 
-// This file holds what Nexora adds on top of upstream
+// This file holds what NX adds on top of upstream
 // github.com/sagernet/sing-openvpn. It exposes the authenticated username behind
 // a client's assigned VPN (tunnel) source address so the sing-box server
 // endpoint can tag each routed connection with metadata.User for per-user
@@ -11,7 +11,7 @@ import "net/netip"
 // change the server's users while it runs (SetAuthenticator, DisconnectUsers).
 //
 // Everything else is upstream's, apart from the few one-line hooks into it
-// (grep for "Nexora"): keep it that way, so re-syncing to a
+// (grep for "NX"): keep it that way, so re-syncing to a
 // newer upstream sing-openvpn is a clean copy, this file, and those hooks.
 
 // SourceUser returns the authenticated username of the client that owns the
@@ -36,19 +36,19 @@ func (r *peerRouteRegistry) usernameOf(address netip.Addr) (string, bool) {
 	if !ok || route.session == nil {
 		return "", false
 	}
-	return route.session.loadNexoraUsername()
+	return route.session.loadNXUsername()
 }
 
-// storeNexoraUsername records the authenticated username on the peer session.
+// storeNXUsername records the authenticated username on the peer session.
 // Called from tlsServerSession.lockAuthenticatedUsername.
-func (s *tlsPeerSession) storeNexoraUsername(username string) {
+func (s *tlsPeerSession) storeNXUsername(username string) {
 	u := username
-	s.nexoraUsername.Store(&u)
+	s.nxUsername.Store(&u)
 }
 
-// loadNexoraUsername returns the authenticated username, if auth has completed.
-func (s *tlsPeerSession) loadNexoraUsername() (string, bool) {
-	if p := s.nexoraUsername.Load(); p != nil && *p != "" {
+// loadNXUsername returns the authenticated username, if auth has completed.
+func (s *tlsPeerSession) loadNXUsername() (string, bool) {
+	if p := s.nxUsername.Load(); p != nil && *p != "" {
 		return *p, true
 	}
 	return "", false
@@ -78,13 +78,13 @@ func announceServer(logger any, server *Server) {
 // without rebuilding it, which drops every client until its ping-restart runs
 // out.
 func (s *Server) SetAuthenticator(authenticator UserPassAuthenticator) {
-	s.nexoraAuthenticator.Store(&authenticator)
+	s.nxAuthenticator.Store(&authenticator)
 }
 
 // authenticator is the check a login goes through: the one SetAuthenticator
 // gave, else the one the server was built with.
 func (s *Server) authenticator() UserPassAuthenticator {
-	if p := s.nexoraAuthenticator.Load(); p != nil {
+	if p := s.nxAuthenticator.Load(); p != nil {
 		return *p
 	}
 	return s.options.Authentication.Authenticator
@@ -100,7 +100,7 @@ func (s *Server) DisconnectUsers(keep func(username string) bool) int {
 	s.tls.sessionAccess.RLock()
 	var closing []*tlsServerSession
 	for _, session := range s.tls.sessionByPeer {
-		if username, ok := session.tlsPeerSession.loadNexoraUsername(); ok && !keep(username) {
+		if username, ok := session.tlsPeerSession.loadNXUsername(); ok && !keep(username) {
 			closing = append(closing, session)
 		}
 	}

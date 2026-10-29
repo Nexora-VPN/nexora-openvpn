@@ -510,7 +510,7 @@ func (s *tlsServerSession) logTermination(err error) {
 }
 
 func (s *tlsServerSession) verifyUserPass(ctx context.Context, message tlsKeyMethodMessage) error {
-	authenticator := s.server.parent.authenticator() // Nexora fork: swappable, see source_user.go
+	authenticator := s.server.parent.authenticator() // NX fork: swappable, see source_user.go
 	if authenticator == nil {
 		return nil
 	}
@@ -530,10 +530,10 @@ func (s *tlsServerSession) lockAuthenticatedUsername(username string) error {
 	}
 	s.authenticatedUsername = username
 	s.authenticatedUsernameSet = true
-	// Nexora fork: mirror the username onto the embedded peer session so the
+	// NX fork: mirror the username onto the embedded peer session so the
 	// route registry (which stores *tlsPeerSession) can resolve it. See
 	// source_user.go.
-	s.tlsPeerSession.storeNexoraUsername(username)
+	s.tlsPeerSession.storeNXUsername(username)
 	return nil
 }
 

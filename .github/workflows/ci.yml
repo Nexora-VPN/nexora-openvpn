@@ -1,4 +1,4 @@
-# Minimal CI for the Nexora fork: verify the module builds, vets and (its own)
+# Minimal CI for the NX fork: verify the module builds, vets and (its own)
 # tests pass. Upstream's Makefile/test suite lived in a separate `test/`
 # submodule that is not part of the published module, so we don't run it here —
 # this fork's only change is source_user.go.

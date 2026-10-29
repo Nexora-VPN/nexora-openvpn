@@ -99,10 +99,10 @@ type tlsPeerSession struct {
 
 	authenticatedDataPacketObserver func() bool
 
-	// nexoraUsername (Nexora fork) holds the authenticated username once auth
+	// nxUsername (NX fork) holds the authenticated username once auth
 	// completes, so the peer route registry can resolve a VPN source address to
 	// its user for per-user accounting. See source_user.go.
-	nexoraUsername atomic.Pointer[string]
+	nxUsername atomic.Pointer[string]
 }
 
 // Upstream BUF_SIZE (ssl.c) bounds plaintext control payloads.
